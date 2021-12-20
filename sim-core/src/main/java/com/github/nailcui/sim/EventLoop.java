@@ -1,12 +1,8 @@
 package com.github.nailcui.sim;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -16,14 +12,14 @@ import lombok.extern.slf4j.Slf4j;
 class EventLoop extends Thread {
 
   private Selector selector = Selector.open();
-  private Queue<SocketChannel> channelQueue = new ConcurrentLinkedQueue<>();
+  private Queue<ChannelContext> channelQueue = new ConcurrentLinkedQueue<>();
 
   EventLoop() throws IOException {
   }
 
-  public void register(SocketChannel client) throws IOException {
-    client.configureBlocking(false);
-    this.channelQueue.offer(client);
+  public void register(ChannelContext context) throws IOException {
+    context.socketChannel.configureBlocking(false);
+    this.channelQueue.offer(context);
     this.selector.wakeup();
   }
 
@@ -32,29 +28,34 @@ class EventLoop extends Thread {
     while (true) {
       log.info("event loop select...");
       try {
+        // 这个sleep是debug用的
         sleep(1000);
         int select = this.selector.select();
         log.info("event loop select: {}", select);
+
+        // 处理新连接，大部分时候应该都是空的，这一步考虑怎么优化一下
+        ChannelContext context = this.channelQueue.poll();
+        while (context != null) {
+          // 将context绑定上去，使得之后时间过来后可以拿到
+          context.socketChannel.register(this.selector, SelectionKey.OP_READ, context);
+          context.handler.onConnect(context);
+          context = this.channelQueue.poll();
+        }
         if (select == 0) {
-          // 处理新连接
-          SocketChannel client = this.channelQueue.poll();
-          while (client != null) {
-            client.register(this.selector, SelectionKey.OP_READ);
-            client = this.channelQueue.poll();
-          }
           continue;
         }
       } catch (Exception e) {
+        // todo 异常处理、分类
         log.info("event loop select exception: ", e);
         continue;
       }
+      // 处理各种事件
       Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
       while (keyIterator.hasNext()) {
         SelectionKey key = keyIterator.next();
         keyIterator.remove();
-        if (key.isConnectable()) {
-          log.info("key connectable");
-        } else if (key.isReadable()) {
+        log.info("key: {}", key);
+        if (key.isReadable()) {
           log.info("key readable");
           try {
             handleRead(key);
@@ -69,7 +70,7 @@ class EventLoop extends Thread {
             log.error("read exception: ", e);
           }
         } else if (key.isValid()) {
-          log.info("key valid");
+          handleValid(key);
         } else {
           log.info("unKnow key type");
         }
@@ -77,41 +78,17 @@ class EventLoop extends Thread {
     }
   }
 
+  private void handleValid(SelectionKey key) {
+    ChannelContext context = ChannelContext.contextOf(key);
+    context.handler.onValid(context);
+  }
+
   private void handleRead(SelectionKey key) throws Exception {
-    ByteBuffer buffer = ByteBuffer.allocate(1024);
-    SocketChannel client = (SocketChannel) key.channel();
-    int readed = client.read(buffer);
-    StringBuilder sb = new StringBuilder();
-    if (readed == -1) {
-      log.info("connection closed by client");
-      client.close();
-      key.cancel();
-      return;
-    } else {
-      buffer.flip();
-      sb.append(new String(buffer.array(), 0, readed, StandardCharsets.UTF_8));
-      buffer.clear();
-    }
-    readed = client.read(buffer);
-    while (readed != -1 && readed != 0) {
-      buffer.flip();
-      sb.append(new String(buffer.array(), 0, readed, StandardCharsets.UTF_8));
-      buffer.clear();
-      readed = client.read(buffer);
-    }
-    log.info("read:  {}", sb.toString());
-    key.interestOps(SelectionKey.OP_WRITE);
-    key.attach(ByteBuffer.wrap(sb.toString().getBytes(StandardCharsets.UTF_8)));
+    ChannelContext.contextOf(key).read(key);
   }
 
   private void handleWrite(SelectionKey key) throws Exception {
-    SocketChannel channel = (SocketChannel) key.channel();
-    ByteBuffer writeBuffer = (ByteBuffer) key.attachment();
-    log.info("send: {}", writeBuffer.array());
-    channel.write(writeBuffer);
-    if (!writeBuffer.hasRemaining()) {
-      key.interestOps(SelectionKey.OP_READ);
-    }
+    ChannelContext.contextOf(key).write(key);
   }
 
 }
