@@ -64,7 +64,7 @@ public class Server {
           this.conns++;
           EventLoop eventLoop = this.loops.get((int) (this.conns % this.loopSize));
           SocketChannel client = server.accept();
-          eventLoop.register(new ChannelContext(client, this.handler));
+          eventLoop.register(new ChannelContext(client, this.handler, eventLoop));
           log.info("key acceptable register end");
         } else {
           log.info("unKnow key type");

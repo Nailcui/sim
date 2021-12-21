@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Queue;
+import java.util.concurrent.LinkedBlockingQueue;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -14,8 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ChannelContext {
   public SocketChannel socketChannel;
+  private EventLoop eventLoop;
   private ByteBuffer readBuffer = ByteBuffer.allocate(32);
   private ByteBuffer writeBuffer = ByteBuffer.allocate(32);
+  private Queue<Object> readQueue = new LinkedBlockingQueue<>();
+  private Queue<Object> writeQueue = new LinkedBlockingQueue<>();
   public Handler handler;
 
   private void readBufferExtendIfNeeded() {
@@ -28,9 +33,11 @@ public class ChannelContext {
     }
   }
 
-  public ChannelContext(SocketChannel socketChannel, Handler handler) {
+  public ChannelContext(SocketChannel socketChannel, Handler handler, EventLoop eventLoop) {
     this.socketChannel = socketChannel;
     this.handler = handler;
+    this.eventLoop = eventLoop;
+    this.writeBuffer.flip();
   }
 
   public static ChannelContext contextOf(SelectionKey key) {
@@ -49,16 +56,37 @@ public class ChannelContext {
         key.cancel();
         return;
       } else if (readed > 0) {
-        this.handler.decode(this, this.readBuffer);
+        this.handler.decode(this.readBuffer, this.readQueue);
       }
+    }
+    Object msg = this.readQueue.poll();
+    while (msg != null) {
+      this.handler.onMessage(this, msg);
+      msg = this.readQueue.poll();
     }
   }
 
-  public void write(SelectionKey key) throws IOException {
-    log.info("send: {}", writeBuffer.array());
-    this.socketChannel.write(writeBuffer);
-    if (!writeBuffer.hasRemaining()) {
-      key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+  public void write(Object msg) throws IOException {
+    if (this.writeQueue.offer(msg)) {
+      this.eventLoop.notifyWrite(this);
+    }
+  }
+
+  void write(SelectionKey key) throws IOException {
+    if (writeBuffer.hasRemaining()) {
+      this.socketChannel.write(writeBuffer);
+    }
+    while (!writeBuffer.hasRemaining()) {
+      writeBuffer.clear();
+      Object msg = this.writeQueue.poll();
+      if (msg == null) {
+        writeBuffer.flip();
+        key.interestOps(SelectionKey.OP_READ);
+        return;
+      }
+      this.handler.encode(writeBuffer, msg);
+      writeBuffer.flip();
+      this.socketChannel.write(writeBuffer);
     }
 
   }

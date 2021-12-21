@@ -13,6 +13,7 @@ class EventLoop extends Thread {
 
   private Selector selector = Selector.open();
   private Queue<ChannelContext> channelQueue = new ConcurrentLinkedQueue<>();
+  private Queue<ChannelContext> needWriteQueue = new ConcurrentLinkedQueue<>();
 
   EventLoop() throws IOException {
   }
@@ -23,13 +24,18 @@ class EventLoop extends Thread {
     this.selector.wakeup();
   }
 
+  public void notifyWrite(ChannelContext context) {
+    this.needWriteQueue.offer(context);
+    this.selector.wakeup();
+  }
+
   @Override
   public void run() {
     while (true) {
       log.info("event loop select...");
       try {
         // 这个sleep是debug用的
-        sleep(1000);
+//        sleep(1000);
         int select = this.selector.select();
         log.info("event loop select: {}", select);
 
@@ -40,6 +46,12 @@ class EventLoop extends Thread {
           context.socketChannel.register(this.selector, SelectionKey.OP_READ, context);
           context.handler.onConnect(context);
           context = this.channelQueue.poll();
+        }
+        ChannelContext needWriteContext = this.needWriteQueue.poll();
+        while (needWriteContext != null) {
+          // 将context绑定上去，使得之后时间过来后可以拿到
+          needWriteContext.socketChannel.register(this.selector, SelectionKey.OP_WRITE, needWriteContext);
+          needWriteContext = this.channelQueue.poll();
         }
         if (select == 0) {
           continue;
@@ -67,7 +79,7 @@ class EventLoop extends Thread {
           try {
             handleWrite(key);
           } catch (Exception e) {
-            log.error("read exception: ", e);
+            log.error("write exception: ", e);
           }
         } else if (key.isValid()) {
           handleValid(key);

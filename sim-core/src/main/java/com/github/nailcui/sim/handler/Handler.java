@@ -2,6 +2,7 @@ package com.github.nailcui.sim.handler;
 
 import com.github.nailcui.sim.ChannelContext;
 import java.nio.ByteBuffer;
+import java.util.Queue;
 
 /**
  * @author dingyu
@@ -13,5 +14,9 @@ public interface Handler {
   void onValid(ChannelContext context);
   void onException(ChannelContext context, Exception e);
 
-  void decode(ChannelContext context, ByteBuffer readBuffer);
+  void decode(ByteBuffer readBuffer, Queue<Object> readQueue);
+
+  void onMessage(ChannelContext context, Object msg);
+
+  void encode(ByteBuffer writeBuffer, Object msg);
 }

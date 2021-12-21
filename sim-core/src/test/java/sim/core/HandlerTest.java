@@ -2,8 +2,10 @@ package sim.core;
 
 import com.github.nailcui.sim.ChannelContext;
 import com.github.nailcui.sim.handler.AbstractHandler;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Queue;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -19,6 +21,16 @@ public class HandlerTest extends AbstractHandler {
   }
 
   @Override
+  public void onMessage(ChannelContext context, Object msg) {
+    log.info("on message: {}", msg);
+    try {
+      context.write(msg);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  @Override
   public void onValid(ChannelContext context) {
     log.info("on valid");
   }
@@ -29,9 +41,17 @@ public class HandlerTest extends AbstractHandler {
   }
 
   @Override
-  public void decode(ChannelContext context, ByteBuffer readBuffer) {
+  public void encode(ByteBuffer writeBuffer, Object msg) {
+    writeBuffer.put(((String)msg).getBytes(StandardCharsets.UTF_8));
+  }
+
+  @Override
+  public void decode(ByteBuffer readBuffer, Queue<Object> readQueue) {
     readBuffer.flip();
-    log.info("read: {}", new String(readBuffer.array(), readBuffer.position(), readBuffer.limit(), StandardCharsets.UTF_8));
+    String msg = new String(readBuffer.array(), readBuffer.position(), readBuffer.limit(),
+        StandardCharsets.UTF_8);
+    log.info("decode: {}", msg);
+    readQueue.offer(msg);
     readBuffer.clear();
   }
 }
