@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author dingyu
- * @date 2021-12-20 16:31
+ * @date 2021-12-19 00:40
  */
 @Slf4j
 public class ChannelContext {
@@ -54,9 +54,12 @@ public class ChannelContext {
         log.info("connection closed by client");
         this.socketChannel.close();
         key.cancel();
+        this.handler.onValid(this);
         return;
       } else if (readed > 0) {
+        this.readBuffer.flip();
         this.handler.decode(this.readBuffer, this.readQueue);
+        this.readBuffer.compact();
       }
     }
     Object msg = this.readQueue.poll();

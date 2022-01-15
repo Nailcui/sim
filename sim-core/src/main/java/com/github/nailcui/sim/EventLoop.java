@@ -1,6 +1,7 @@
 package com.github.nailcui.sim;
 
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
@@ -24,9 +25,8 @@ class EventLoop extends Thread {
     this.selector.wakeup();
   }
 
-  public void notifyWrite(ChannelContext context) {
-    this.needWriteQueue.offer(context);
-    this.selector.wakeup();
+  public void notifyWrite(ChannelContext context) throws ClosedChannelException {
+    context.socketChannel.register(this.selector, SelectionKey.OP_WRITE, context);
   }
 
   @Override
@@ -46,12 +46,6 @@ class EventLoop extends Thread {
           context.socketChannel.register(this.selector, SelectionKey.OP_READ, context);
           context.handler.onConnect(context);
           context = this.channelQueue.poll();
-        }
-        ChannelContext needWriteContext = this.needWriteQueue.poll();
-        while (needWriteContext != null) {
-          // 将context绑定上去，使得之后时间过来后可以拿到
-          needWriteContext.socketChannel.register(this.selector, SelectionKey.OP_WRITE, needWriteContext);
-          needWriteContext = this.channelQueue.poll();
         }
         if (select == 0) {
           continue;

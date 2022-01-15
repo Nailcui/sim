@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class Server {
-  private int port = 8080;
+  private int port = 10010;
   private Handler handler;
   private ServerSocketChannel server = ServerSocketChannel.open();
   private Selector selector = Selector.open();

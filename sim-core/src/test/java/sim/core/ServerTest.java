@@ -6,14 +6,14 @@ import org.junit.Test;
 
 /**
  * @author dingyu
- * @date 2021-12-19 00:43
+ * @date 2021-12-19 00:40
  */
 public class ServerTest {
 
   @Test
   public void testServer() throws IOException {
     try {
-      Server server = Server.tcp(8080);
+      Server server = Server.tcp(10010);
       server.handler(new HandlerTest());
       server.start();
     } catch (IOException e) {
