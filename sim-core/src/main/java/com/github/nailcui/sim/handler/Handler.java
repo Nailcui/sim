@@ -8,15 +8,16 @@ import java.util.Queue;
  * @author dingyu
  * @date 2021-12-19 00:40
  */
-public interface Handler {
+public interface Handler extends Codec {
 
   void onConnect(ChannelContext context);
-  void onValid(ChannelContext context);
+  void onInvalid(ChannelContext context);
   void onException(ChannelContext context, Exception e);
 
-  void decode(ByteBuffer readBuffer, Queue<Object> readQueue);
-
+  /**
+   * 接收并处理消息
+   * @param context context
+   * @param msg decode 生成的消息
+   */
   void onMessage(ChannelContext context, Object msg);
-
-  void encode(ByteBuffer writeBuffer, Object msg);
 }

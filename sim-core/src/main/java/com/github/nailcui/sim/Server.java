@@ -18,20 +18,27 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class Server {
+  private final ServerSocketChannel server = ServerSocketChannel.open();
+  private final Selector selector = Selector.open();
   private int port = 10010;
   private Handler handler;
-  private ServerSocketChannel server = ServerSocketChannel.open();
-  private Selector selector = Selector.open();
   private List<EventLoop> loops;
-  private final long loopSize = 2;
+  private long loopSize;
   private long conns = 0;
 
-  public Server() throws IOException {
+  Server() throws IOException {
+  }
+  public static Server tcp(int port) throws IOException {
+    return tcp(port, 2);
   }
 
-  public static Server tcp(int port) throws IOException {
+  public static Server tcp(int port, int loopSize) throws IOException {
+    if (loopSize <= 0) {
+      loopSize = 2;
+    }
     Server server = new Server();
     server.port = port;
+    server.loopSize = loopSize;
     server.loops = new ArrayList<>();
     for (long i = 0; i < server.loopSize; i++) {
       EventLoop eventLoop = new EventLoop();
@@ -47,27 +54,27 @@ public class Server {
   }
 
   public void start() throws IOException {
-    log.info("start server");
+    log.debug("start server in " + this.port);
     this.server.configureBlocking(false);
     this.server.socket().bind(new InetSocketAddress(this.port));
     this.server.register(selector, SelectionKey.OP_ACCEPT);
     while (true) {
-      log.info("select...");
+      log.debug("select...");
       this.selector.select();
-      log.info("selected...");
+      log.debug("selected...");
       Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
       while (keyIterator.hasNext()) {
         SelectionKey key = keyIterator.next();
         keyIterator.remove();
         if (key.isAcceptable()) {
-          log.info("key acceptable");
+          log.debug("key acceptable");
           this.conns++;
           EventLoop eventLoop = this.loops.get((int) (this.conns % this.loopSize));
           SocketChannel client = server.accept();
           eventLoop.register(new ChannelContext(client, this.handler, eventLoop));
-          log.info("key acceptable register end");
+          log.debug("key acceptable register end");
         } else {
-          log.info("unKnow key type");
+          log.debug("unKnow key type: " + key);
         }
       }
     }

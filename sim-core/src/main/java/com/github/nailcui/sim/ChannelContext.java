@@ -16,11 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ChannelContext {
   public SocketChannel socketChannel;
-  private EventLoop eventLoop;
+  private final EventLoop eventLoop;
   private ByteBuffer readBuffer = ByteBuffer.allocate(32);
-  private ByteBuffer writeBuffer = ByteBuffer.allocate(32);
-  private Queue<Object> readQueue = new LinkedBlockingQueue<>();
-  private Queue<Object> writeQueue = new LinkedBlockingQueue<>();
+  private final Queue<Object> readQueue = new LinkedBlockingQueue<>();
+  private final Queue<Object> writeQueue = new LinkedBlockingQueue<>();
+  private final Queue<ByteBuffer> writeBufferQueue = new LinkedBlockingQueue<>();
   public Handler handler;
 
   private void readBufferExtendIfNeeded() {
@@ -37,7 +37,6 @@ public class ChannelContext {
     this.socketChannel = socketChannel;
     this.handler = handler;
     this.eventLoop = eventLoop;
-    this.writeBuffer.flip();
   }
 
   public static ChannelContext contextOf(SelectionKey key) {
@@ -54,7 +53,7 @@ public class ChannelContext {
         log.info("connection closed by client");
         this.socketChannel.close();
         key.cancel();
-        this.handler.onValid(this);
+        this.handler.onInvalid(this);
         return;
       } else if (readed > 0) {
         this.readBuffer.flip();
@@ -76,21 +75,27 @@ public class ChannelContext {
   }
 
   void write(SelectionKey key) throws IOException {
-    if (writeBuffer.hasRemaining()) {
-      this.socketChannel.write(writeBuffer);
-    }
-    while (!writeBuffer.hasRemaining()) {
-      writeBuffer.clear();
-      Object msg = this.writeQueue.poll();
-      if (msg == null) {
-        writeBuffer.flip();
-        key.interestOps(SelectionKey.OP_READ);
-        return;
+    Object msg = this.writeQueue.poll();
+    while (msg != null) {
+      ByteBuffer buf = this.handler.encode(msg);
+      if (buf != null) {
+        // 转为读模式
+        buf.flip();
+        this.writeBufferQueue.offer(buf);
       }
-      this.handler.encode(writeBuffer, msg);
-      writeBuffer.flip();
-      this.socketChannel.write(writeBuffer);
+      msg = this.writeQueue.poll();
     }
 
+    ByteBuffer buffer = this.writeBufferQueue.poll();
+    while (buffer != null) {
+      int l = buffer.remaining();
+      int write = this.socketChannel.write(buffer);
+      if (write < l) {
+        // todo 写入数据太多这里会有问题
+        log.warn("写入数据不够");
+      }
+      buffer = this.writeBufferQueue.poll();
+    }
+    key.interestOps(SelectionKey.OP_READ);
   }
 }

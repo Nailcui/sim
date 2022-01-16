@@ -1,7 +1,6 @@
 package com.github.nailcui.sim;
 
 import java.io.IOException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
@@ -12,9 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class EventLoop extends Thread {
 
-  private Selector selector = Selector.open();
-  private Queue<ChannelContext> channelQueue = new ConcurrentLinkedQueue<>();
-  private Queue<ChannelContext> needWriteQueue = new ConcurrentLinkedQueue<>();
+  private final Selector selector = Selector.open();
+
+  /**
+   * 用于存储: 建立连接后,还未注册到 this.selector 的连接
+   */
+  private final Queue<ChannelContext> channelQueue = new ConcurrentLinkedQueue<>();
+  private final Queue<ChannelContext> needWriteQueue = new ConcurrentLinkedQueue<>();
 
   EventLoop() throws IOException {
   }
@@ -25,27 +28,33 @@ class EventLoop extends Thread {
     this.selector.wakeup();
   }
 
-  public void notifyWrite(ChannelContext context) throws ClosedChannelException {
-    context.socketChannel.register(this.selector, SelectionKey.OP_WRITE, context);
+  public void notifyWrite(ChannelContext context) {
+    this.needWriteQueue.offer(context);
+    this.selector.wakeup();
   }
 
   @Override
   public void run() {
     while (true) {
-      log.info("event loop select...");
+      log.debug("event loop select...");
       try {
-        // 这个sleep是debug用的
-//        sleep(1000);
         int select = this.selector.select();
-        log.info("event loop select: {}", select);
+        log.debug("event loop selected size: {}", select);
 
-        // 处理新连接，大部分时候应该都是空的，这一步考虑怎么优化一下
+        // 处理新连接
         ChannelContext context = this.channelQueue.poll();
         while (context != null) {
           // 将context绑定上去，使得之后时间过来后可以拿到
           context.socketChannel.register(this.selector, SelectionKey.OP_READ, context);
           context.handler.onConnect(context);
           context = this.channelQueue.poll();
+        }
+        ChannelContext needWriteContext = this.needWriteQueue.poll();
+        while (needWriteContext != null) {
+          // 将context绑定上去，使得之后时间过来后可以拿到
+          // todo 这里可以直接处理
+          needWriteContext.socketChannel.register(this.selector, SelectionKey.OP_WRITE, needWriteContext);
+          needWriteContext = this.channelQueue.poll();
         }
         if (select == 0) {
           continue;
@@ -55,38 +64,48 @@ class EventLoop extends Thread {
         log.info("event loop select exception: ", e);
         continue;
       }
-      // 处理各种事件
+
+      // 处理连接事件
       Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
       while (keyIterator.hasNext()) {
         SelectionKey key = keyIterator.next();
         keyIterator.remove();
-        log.info("key: {}", key);
+        log.debug("event loop selected key: {}", key);
+
         if (key.isReadable()) {
-          log.info("key readable");
+          log.debug("event loop selected readable key");
           try {
             handleRead(key);
           } catch (Exception e) {
             log.error("read exception: ", e);
           }
+
         } else if (key.isWritable()) {
-          log.info("key writeable");
+          log.debug("event loop selected writeable key");
           try {
             handleWrite(key);
           } catch (Exception e) {
             log.error("write exception: ", e);
           }
+
         } else if (key.isValid()) {
-          handleValid(key);
+          try {
+            log.debug("event loop selected invalid key");
+            handleInvalid(key);
+          } catch (Exception e) {
+            log.error("invalid exception: ", e);
+          }
+
         } else {
-          log.info("unKnow key type");
+          log.warn("unKnow key type");
         }
       }
     }
   }
 
-  private void handleValid(SelectionKey key) {
+  private void handleInvalid(SelectionKey key) {
     ChannelContext context = ChannelContext.contextOf(key);
-    context.handler.onValid(context);
+    context.handler.onInvalid(context);
   }
 
   private void handleRead(SelectionKey key) throws Exception {
