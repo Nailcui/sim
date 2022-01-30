@@ -28,6 +28,7 @@ public class ChannelContext {
       // 没有剩余容量, 扩容一倍
       log.info("extend readBuffer");
       ByteBuffer old = this.readBuffer;
+      old.flip();
       readBuffer = ByteBuffer.allocate(readBuffer.capacity() * 2);
       readBuffer.put(old);
     }

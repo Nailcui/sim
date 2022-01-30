@@ -53,8 +53,6 @@ public class RedisClientHandler extends AbstractHandler {
 
   @Override
   public void decode(ByteBuffer readBuffer, Queue<Object> readQueue) {
-//    LineCodec.INSTANCE.decode(readBuffer, readQueue);
     codec.decode(readBuffer, readQueue);
-
   }
 }

@@ -26,15 +26,14 @@ public interface Command {
   static Command fromString(String s) {
     s = s.trim();
     String[] strings = s.split(" ");
-    if (strings.length > 1) {
+    if (strings.length > 0) {
       BulkStrings[] bulkStrings = new BulkStrings[strings.length];
       for (int i = 0; i < strings.length; i++) {
         bulkStrings[i] = new BulkStrings(strings[i]);
       }
       return new Arrays(bulkStrings);
-    } else {
-      return new BulkStrings(s);
     }
+    return null;
   }
 
   /**
