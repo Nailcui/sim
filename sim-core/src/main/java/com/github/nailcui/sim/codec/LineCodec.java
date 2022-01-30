@@ -33,7 +33,7 @@ public class LineCodec implements Codec {
       boolean quit = true;
       for (int i = readBuffer.position(); i < readBuffer.limit(); i++) {
         if (readBuffer.array()[i] == '\n') {
-          String s = new String(readBuffer.array(), readBuffer.position(), i, StandardCharsets.UTF_8);
+          String s = new String(readBuffer.array(), readBuffer.position(), i - readBuffer.position(), StandardCharsets.UTF_8);
           readQueue.offer(s);
           readBuffer.position(i + 1);
           quit = false;
