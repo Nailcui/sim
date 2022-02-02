@@ -11,6 +11,8 @@ public class SimpleStrings implements Command {
 
   private final String string;
 
+  public static final Command OK = new SimpleStrings("OK");
+
   public SimpleStrings(String string) {
     this.string = string;
   }

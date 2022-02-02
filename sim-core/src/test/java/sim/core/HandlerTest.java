@@ -23,11 +23,7 @@ public class HandlerTest extends AbstractHandler {
   @Override
   public void onMessage(ChannelContext context, Object msg) {
     log.info("on message: {}", msg);
-    try {
-      context.write(msg);
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
+    context.write(msg);
   }
 
   @Override

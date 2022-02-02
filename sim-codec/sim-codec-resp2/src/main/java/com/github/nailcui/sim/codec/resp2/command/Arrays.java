@@ -18,6 +18,10 @@ public class Arrays implements Command {
     this.commands = commands;
   }
 
+  public Command[] getCommands() {
+    return commands;
+  }
+
   @Override
   public ByteBuffer encode() {
     byte[] bytes = ("*" + commands.length + "\r\n").getBytes(StandardCharsets.UTF_8);

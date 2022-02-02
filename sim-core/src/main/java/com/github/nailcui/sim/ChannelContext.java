@@ -69,7 +69,7 @@ public class ChannelContext {
     }
   }
 
-  public void write(Object msg) throws IOException {
+  public void write(Object msg) {
     if (this.writeQueue.offer(msg)) {
       this.eventLoop.notifyWrite(this);
     }

@@ -13,6 +13,8 @@
     <module>sim-core</module>
     <module>sim-example</module>
     <module>sim-codec</module>
+    <module>sim-project</module>
+    <module>sim-project/sim-redis-server</module>
   </modules>
 
   <properties>

@@ -17,12 +17,8 @@ public class ClientHandler extends AbstractHandler {
 
   @Override
   public void onConnect(ChannelContext context) {
-    try {
-      log.info("connected, send hello");
-      context.write("hello");
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
+    log.info("connected, send hello");
+    context.write("hello");
   }
 
   @Override

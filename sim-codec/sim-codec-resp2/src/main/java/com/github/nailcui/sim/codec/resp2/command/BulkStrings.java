@@ -18,6 +18,10 @@ public class BulkStrings implements Command {
     this.string = string;
   }
 
+  public String getString() {
+    return string;
+  }
+
   @Override
   public ByteBuffer encode() {
     byte[] bytes;

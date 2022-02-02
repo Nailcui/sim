@@ -23,12 +23,8 @@ public class RedisClientHandler extends AbstractHandler {
 
   @Override
   public void onConnect(ChannelContext context) {
-    try {
-      log.info("connected, send hello");
-      context.write("*2\r\n$3\r\nget\r\n$1\r\na\r\n");
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
+    log.info("connected, send hello");
+    context.write("*2\r\n$3\r\nget\r\n$1\r\na\r\n");
   }
 
   @Override
